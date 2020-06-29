@@ -1,12 +1,16 @@
 #舔狗舔到最后，终将一无所有！
-#      2020.05.15
+#      2020.05.15初版
+#
+#      2020.06.29日更新
+#更新日志：
+#接入数据API，移除页面分析
+#
 #      作者：C K
-#如果程序运行报错就安装下面的库  安装命令：pip install 包名，例如pip install lxml
+#如果程序运行报错就安装下面的库  安装命令：pip install 包名，例如pip install requests
 import re
 import json
 import smtplib
 import requests
-from lxml import etree
 HEADERS = {
     'accept-encoding': 'gzip, deflate, br',
     'accept-language': 'zh-CN,zh;q=0.9',
@@ -22,60 +26,37 @@ def get_real_address(url):
     res = requests.get(url, headers=HEADERS, allow_redirects=False)
     newurl = res.headers['Location'] if res.status_code == 302 else None
     return newurl
-#解密抖音加密信息
-def handle_decode(input_data):
-    regex_list = [
-        {'name': [' &#xe603; ', ' &#xe60d; ', ' &#xe616; '], 'value': 0},
-        {'name': [' &#xe602; ', ' &#xe60e; ', ' &#xe618; '], 'value': 1},
-        {'name': [' &#xe605; ', ' &#xe610; ', ' &#xe617; '], 'value': 2},
-        {'name': [' &#xe604; ', ' &#xe611; ', ' &#xe61a; '], 'value': 3},
-        {'name': [' &#xe606; ', ' &#xe60c; ', ' &#xe619; '], 'value': 4},
-        {'name': [' &#xe607; ', ' &#xe60f; ', ' &#xe61b; '], 'value': 5},
-        {'name': [' &#xe608; ', ' &#xe612; ', ' &#xe61f; '], 'value': 6},
-        {'name': [' &#xe60a; ', ' &#xe613; ', ' &#xe61c; '], 'value': 7},
-        {'name': [' &#xe60b; ', ' &#xe614; ', ' &#xe61d; '], 'value': 8},
-        {'name': [' &#xe609; ', ' &#xe615; ', ' &#xe61e; '], 'value': 9},
-    ]
-    for i1 in regex_list:
-        for i2 in i1['name']:
-            input_data = re.sub(i2, str(i1['value']), input_data)
-    html = etree.HTML(input_data)
+#正则真实地址获取ID
+def realurl(newurl):
+    pattern = re.compile('(?<=sec_uid=).*(?=&u_code)')
+    ree = pattern.search(newurl)
+    return ree.group()
+#拼接抖音信息api
+def dyapi(dyid):
+    dyapi = "https://www.iesdouyin.com/web/api/v2/user/info/?sec_uid="+dyid
+    response = requests.get(dyapi).text
+    content = json.loads(response)
     douyin_info = {}
     # 获取昵称
-    douyin_info['女神昵称'] = html.xpath("//div[@class='personal-card']/div[@class='info1']//p[@class='nickname']/text()")[0]
-    # 获取抖音ID
-    douyin_id = html.xpath("//div[@class='personal-card']/div[@class='info1']/p[@class='shortid']//text()")
-    douyin_info['女神ID'] = ''.join(douyin_id).replace('抖音ID：', '').replace(' ', '')
+    douyin_info['女神昵称'] = content["user_info"]["nickname"]
+    douyin_info['女神ID'] = content["user_info"]["short_id"]
     # 关注的用户数
-    follow_count = html.xpath("//div[@class='personal-card']/div[@class='info2']/p[@class='follow-info']//span[@class='focus block']//i[@class='icon iconfont follow-num']/text()")
-    douyin_info['女神的关注数'] = ''.join(follow_count).replace('关注', '').replace(' ', '')
+    douyin_info['女神的关注数'] = content["user_info"]["following_count"]
     # 作品数
-    works =html.xpath("//div[@class='tab-wrap']/div[@class='user-tab active tab get-list']//text()")
-    douyin_info['女神的作品数'] = ''.join(works).replace('作品', '').replace(' ', '')
-    #喜欢
-    shelikes = html.xpath("//div[@class='like-tab tab get-list']//text()")
-    douyin_info['女神的喜欢'] = ''.join(shelikes).replace('喜欢', '').replace(' ', '')
+    douyin_info['女神的作品数'] = content["user_info"]["aweme_count"]
+    # 喜欢
+
+    douyin_info['女神的喜欢'] = content["user_info"]["favoriting_count"]
     # 粉丝
-    fans_value = ''.join(html.xpath("//div[@class='personal-card']/div[@class='info2']/p[@class='follow-info']//span[@class='follower block']//i[@class='icon iconfont follow-num']/text()"))
-    unit = html.xpath("//div[@class='personal-card']/div[@class='info2']/p[@class='follow-info']//span[@class='follower block']/span[@class='num']/text()")
-    if unit[-1].strip() == 'w':
-        douyin_info['女神的粉丝数'] = str(float(fans_value) / 10) + 'w'
-    else:
-        douyin_info['女神的粉丝数'] = fans_value
+
+    douyin_info['女神的粉丝数'] = content["user_info"]["follower_count"]
+
     # 点赞
-    like = ''.join(html.xpath("//div[@class='personal-card']/div[@class='info2']/p[@class='follow-info']//span[@class='liked-num block']//i[@class='icon iconfont follow-num']/text()"))
-    unit = html.xpath("//div[@class='personal-card']/div[@class='info2']/p[@class='follow-info']//span[@class='liked-num block']/span[@class='num']/text()")
-    if unit[-1].strip() == 'w':
-        douyin_info['女神的获赞数'] = str(float(like) / 10) + 'w'
-    else:
-        douyin_info['女神的获赞数'] = like
+
+    douyin_info['女神的获赞数'] = content["user_info"]["total_favorited"]
+
+
     return douyin_info
-def handle_douyin_info(url):
-    header = {
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.75 Safari/537.36'
-    }
-    response = requests.get(url=url, headers=header)
-    return handle_decode(response.text)
 #发送邮件
 def sendEmail(mail_msg):
     from email.mime.text import MIMEText
